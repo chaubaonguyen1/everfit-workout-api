@@ -1,0 +1,41 @@
+{
+  "skill_name": "nestjs-code-review",
+  "evals": [
+    {
+      "id": 1,
+      "name": "generic-orders-module",
+      "prompt": "review giúp mình module orders trong project này với, xem có đúng convention nestjs không, có lỗi gì nghiêm trọng không",
+      "expected_output": "Severity-ranked review catching: SQL injection via $queryRawUnsafe, missing transaction for order+items, forEach(async) stock updates, Prisma/business logic in controller, nested DTO not validated + no global ValidationPipe, user passwordHash leaked, unbounded list, N+1 product lookup, empty search → 404.",
+      "files": [
+        "fixtures/orders-module"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "project-rules-personal-records",
+      "prompt": "mình vừa nhờ AI viết module personal-records (src/modules/personal-records). review theo convention của repo giúp mình trước khi merge",
+      "expected_output": "Applies CLAUDE.md rules: Prisma in service instead of repository, hardcoded 'kg'|'lb' + 2.2046 instead of unit registry, NotFoundException for empty range instead of 200 + message / DomainError, @nestjs import in domain/, missing spec for pure functions; plus timezone-unaware month boundaries, rounding before comparing, loading 50k sets into memory instead of indexed ORDER BY LIMIT 1.",
+      "files": [
+        "fixtures/project-rules"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "clean-tags-module",
+      "prompt": "review nhanh module tags này trước khi mình merge nhé",
+      "expected_output": "Verdict approve / approve with comments; no Critical findings; notes minor issues such as HttpException always mapped to VALIDATION_ERROR code, missing explicit return type on TagsService.list; acknowledges what's done well.",
+      "files": [
+        "fixtures/clean-module"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "templates-branch-diff",
+      "prompt": "mình vừa làm xong branch feature/templates (thêm cursor pagination, duplicate với rename template). review diff so với main giúp mình trước khi tạo PR nhé",
+      "expected_output": "Catches the subtle behaviour bugs in the diff (this.prisma inside tx, createdAt-only cursor, IDOR in rename, swallowed error) while ignoring rename/format noise.",
+      "files": [
+        "fixtures/templates-diff"
+      ]
+    }
+  ]
+}
