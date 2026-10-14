@@ -1,0 +1,44 @@
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import type { CatalogExercise } from './domain/exercise-catalog';
+
+export interface ExerciseRecord {
+  readonly id: string;
+  readonly name: string;
+  readonly normalizedName: string;
+  readonly muscleGroups: readonly string[];
+}
+
+const EXERCISE_SELECT = { id: true, name: true, normalizedName: true, muscleGroups: true } as const;
+
+@Injectable()
+export class ExercisesRepository {
+  constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Makes the DB mapping match the catalog exactly, atomically: catalog exercises are upserted,
+   * and exercises that were removed from the catalog lose their muscle groups (they are kept,
+   * since logged workouts reference them).
+   */
+  async syncCatalog(exercises: readonly CatalogExercise[]): Promise<void> {
+    const names = exercises.map((e) => e.normalizedName);
+
+    await this.prisma.$transaction([
+      ...exercises.map(({ name, normalizedName, muscleGroups }) =>
+        this.prisma.exercise.upsert({
+          where: { normalizedName },
+          create: { name, normalizedName, muscleGroups: [...muscleGroups] },
+          update: { name, muscleGroups: [...muscleGroups] },
+        }),
+      ),
+      this.prisma.exercise.updateMany({
+        where: { normalizedName: { notIn: names }, NOT: { muscleGroups: { isEmpty: true } } },
+        data: { muscleGroups: [] },
+      }),
+    ]);
+  }
+
+  findAll(): Promise<ExerciseRecord[]> {
+    return this.prisma.exercise.findMany({ select: EXERCISE_SELECT, orderBy: { name: 'asc' } });
+  }
+}
