@@ -7,6 +7,7 @@ import { LoggerModule } from './infrastructure/logger/logger.module';
 import { PrismaModule } from './infrastructure/prisma/prisma.module';
 import { ExercisesModule } from './modules/exercises/exercises.module';
 import { UnitsModule } from './modules/units/units.module';
+import { WorkoutsModule } from './modules/workouts/workouts.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { UnitsModule } from './modules/units/units.module';
     HealthModule,
     UnitsModule,
     ExercisesModule,
+    WorkoutsModule,
   ],
 })
 export class AppModule {}

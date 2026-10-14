@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import type { Tx } from '../../infrastructure/prisma/transaction-runner';
 import type { CatalogExercise } from './domain/exercise-catalog';
 
 export interface ExerciseRecord {
@@ -7,6 +8,12 @@ export interface ExerciseRecord {
   readonly name: string;
   readonly normalizedName: string;
   readonly muscleGroups: readonly string[];
+}
+
+export interface ExerciseRef {
+  readonly id: string;
+  /** Canonical display name (as first defined in the catalog or first logged). */
+  readonly name: string;
 }
 
 const EXERCISE_SELECT = { id: true, name: true, normalizedName: true, muscleGroups: true } as const;
@@ -36,6 +43,29 @@ export class ExercisesRepository {
         data: { muscleGroups: [] },
       }),
     ]);
+  }
+
+  /**
+   * Returns ids for the given exercises, creating the missing ones. Race-safe without locks in
+   * application code: `ON CONFLICT DO NOTHING` lets concurrent requests creating the same new
+   * exercise both succeed, and the follow-up read sees whichever row won.
+   * Pass exercises sorted by normalizedName so concurrent batches acquire row locks in one order.
+   */
+  async resolveIds(
+    db: Tx,
+    exercises: readonly { name: string; normalizedName: string }[],
+  ): Promise<Map<string, ExerciseRef>> {
+    if (exercises.length === 0) return new Map();
+
+    await db.exercise.createMany({
+      data: exercises.map(({ name, normalizedName }) => ({ name, normalizedName })),
+      skipDuplicates: true,
+    });
+    const rows = await db.exercise.findMany({
+      where: { normalizedName: { in: exercises.map((e) => e.normalizedName) } },
+      select: { id: true, name: true, normalizedName: true },
+    });
+    return new Map(rows.map((r) => [r.normalizedName, { id: r.id, name: r.name }]));
   }
 
   findAll(): Promise<ExerciseRecord[]> {

@@ -4,7 +4,8 @@ import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AppConfig } from '../../config/configuration';
 import { ExerciseCatalog, parseExerciseCatalog } from './domain/exercise-catalog';
-import { ExerciseRecord, ExercisesRepository } from './exercises.repository';
+import type { Tx } from '../../infrastructure/prisma/transaction-runner';
+import { ExerciseRecord, ExerciseRef, ExercisesRepository } from './exercises.repository';
 
 @Injectable()
 export class ExercisesService implements OnApplicationBootstrap {
@@ -30,6 +31,14 @@ export class ExercisesService implements OnApplicationBootstrap {
 
   get muscleGroups(): readonly string[] {
     return this.catalog.muscleGroups;
+  }
+
+  /** Ids for the exercises of a workout batch, creating unknown ones (inside the caller's transaction). */
+  resolveIds(
+    tx: Tx,
+    exercises: readonly { name: string; normalizedName: string }[],
+  ): Promise<Map<string, ExerciseRef>> {
+    return this.repository.resolveIds(tx, exercises);
   }
 
   findAll(): Promise<ExerciseRecord[]> {
