@@ -43,8 +43,12 @@ export class ExercisesService implements OnApplicationBootstrap {
     return this.repository.resolveIds(tx, exercises);
   }
 
-  findIdsMatching(filter: { term?: string; muscleGroup?: string }): Promise<string[]> {
-    return this.repository.findIdsMatching(filter);
+  /** Ids of exercises the user has logged that match the name term and/or muscle group. */
+  findIdsMatching(
+    userId: string,
+    filter: { term?: string; muscleGroup?: string },
+  ): Promise<string[]> {
+    return this.repository.findIdsMatching(userId, filter);
   }
 
   /** Exact (normalized) name lookup: "bench  PRESS" finds "Bench Press". */

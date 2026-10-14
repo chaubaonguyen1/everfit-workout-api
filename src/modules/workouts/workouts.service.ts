@@ -37,7 +37,7 @@ export class WorkoutsService {
 
     let exerciseIds: string[] | undefined;
     if (filters.exerciseTerm || filters.muscleGroup) {
-      exerciseIds = await this.exercises.findIdsMatching({
+      exerciseIds = await this.exercises.findIdsMatching(userId, {
         term: filters.exerciseTerm,
         muscleGroup: filters.muscleGroup,
       });

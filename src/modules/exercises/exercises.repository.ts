@@ -74,8 +74,15 @@ export class ExercisesRepository {
    * Ids of exercises whose normalized name contains `term` and/or that train `muscleGroup`.
    * LIKE wildcards in the term are escaped. The trigram index serves terms of 3+ characters;
    * shorter terms scan the (small, catalog-sized) exercises table.
+   *
+   * Restricted to exercises `userId` has logged: the exercises table is shared by all users, so
+   * a broad term like "e" could otherwise expand into thousands of ids this user never trained.
+   * The EXISTS probe is one index lookup per candidate (workout_entries(user_id, exercise_id, …)).
    */
-  async findIdsMatching(filter: { term?: string; muscleGroup?: string }): Promise<string[]> {
+  async findIdsMatching(
+    userId: string,
+    filter: { term?: string; muscleGroup?: string },
+  ): Promise<string[]> {
     const conditions: Prisma.Sql[] = [];
     if (filter.term) {
       conditions.push(Prisma.sql`normalized_name LIKE ${`%${escapeLike(filter.term)}%`}`);
@@ -84,6 +91,9 @@ export class ExercisesRepository {
       conditions.push(Prisma.sql`muscle_groups @> ARRAY[${filter.muscleGroup}]::text[]`);
     }
     if (conditions.length === 0) return [];
+    conditions.push(
+      Prisma.sql`EXISTS (SELECT 1 FROM workout_entries e WHERE e.user_id = ${userId} AND e.exercise_id = exercises.id)`,
+    );
 
     const rows = await this.prisma.$queryRaw<{ id: string }[]>`
       SELECT id FROM exercises WHERE ${Prisma.join(conditions, ' AND ')}`;

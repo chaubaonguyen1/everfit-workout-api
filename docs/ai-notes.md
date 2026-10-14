@@ -127,3 +127,18 @@ Format: date · milestone · what the AI did · what was wrong / rejected · how
 - **To document in README:** time-zone rules (offset in `date` wins; `timezone` applies to
   dates without offset and is stored as sent), replay returns 201 + `Idempotent-Replayed`,
   global exercise table (first logger sets the display name).
+
+## M4 review + M6 performance
+- 2026-10-14 · M4 review accepted: cursor bound to a filter fingerprint (reusing it with other
+  filters silently returned a wrong page); instants outside years 0001–9999 rejected (JS accepted
+  year 0 / year 10000, Postgres did not → 500); blank `?exercise=` handled consistently; the
+  time-zone e2e strengthened (it passed even with `timezone` ignored); mapper unit tests.
+- 2026-10-14 · Found while fixing m2: `Date.UTC()` maps years 0–99 to 1900–1999, so
+  `0001-01-01T…` was rejected with a misleading "invalid calendar date". Fixed explicitly.
+- 2026-10-14 · Python-based edits on Windows wrote CRLF into one file; caught by Prettier in lint.
+- 2026-10-14 · **Rejected after measuring:** the reviewer's Major M4-M1 (multi-id exercise filter
+  scanning/sorting all rows per page) with a proposed LATERAL rewrite. Seeded 60k entries /
+  240k sets for one user and ran EXPLAIN ANALYZE on the exact SQL: the planner picks the
+  per-exercise index for few matches and the time index for many; worst case 0.35 ms. Kept the
+  simple query, but adopted the cheaper half of the advice: restrict the id list to exercises the
+  user has logged. Numbers in `docs/performance.md`.
