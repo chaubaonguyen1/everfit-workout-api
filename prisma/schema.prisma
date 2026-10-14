@@ -58,6 +58,25 @@ model WorkoutEntry {
   @@map("workout_entries")
 }
 
+/// Responses of idempotent POSTs, keyed per user. Retrying with the same key and the same body
+/// replays the stored response; the same key with a different body is rejected.
+/// The row is claimed at the start of the write transaction (so concurrent duplicates wait for
+/// the first one) and its response filled before commit — a NULL response is never visible
+/// outside that transaction.
+model IdempotencyKey {
+  userId       String   @map("user_id") @db.VarChar(64)
+  key          String   @db.VarChar(128)
+  /// SHA-256 of the canonical request body.
+  requestHash  String   @map("request_hash") @db.Char(64)
+  responseBody Json?    @map("response_body")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@id([userId, key])
+  // Supports a periodic TTL cleanup (DELETE ... WHERE created_at < now() - interval '24 hours').
+  @@index([createdAt])
+  @@map("idempotency_keys")
+}
+
 model WorkoutSet {
   id       String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   entryId  String  @map("entry_id") @db.Uuid
