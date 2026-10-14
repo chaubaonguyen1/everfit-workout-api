@@ -72,7 +72,8 @@ export class ExercisesRepository {
 
   /**
    * Ids of exercises whose normalized name contains `term` and/or that train `muscleGroup`.
-   * LIKE wildcards in the term are escaped; the trigram index serves the substring match.
+   * LIKE wildcards in the term are escaped. The trigram index serves terms of 3+ characters;
+   * shorter terms scan the (small, catalog-sized) exercises table.
    */
   async findIdsMatching(filter: { term?: string; muscleGroup?: string }): Promise<string[]> {
     const conditions: Prisma.Sql[] = [];

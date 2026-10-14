@@ -42,6 +42,8 @@ export interface HistoryPageInput {
   readonly limit: number;
   /** Output unit; undefined = each set in the unit it was logged in. */
   readonly unit?: WeightUnit;
+  /** Filter fingerprint to embed in the next cursor. */
+  readonly cursorScope: string;
 }
 
 export function toWorkoutHistoryResponse({
@@ -49,6 +51,7 @@ export function toWorkoutHistoryResponse({
   sets,
   limit,
   unit,
+  cursorScope,
 }: HistoryPageInput): WorkoutHistoryResponse {
   const page = rows.slice(0, limit);
   const hasMore = rows.length > limit;
@@ -67,7 +70,9 @@ export function toWorkoutHistoryResponse({
       limit,
       hasMore,
       nextCursor:
-        hasMore && last ? encodeCursor({ performedAt: last.performedAt, id: last.id }) : null,
+        hasMore && last
+          ? encodeCursor({ performedAt: last.performedAt, id: last.id, scope: cursorScope })
+          : null,
     },
     ...(page.length === 0 && { message: EMPTY_HISTORY_MESSAGE }),
   };

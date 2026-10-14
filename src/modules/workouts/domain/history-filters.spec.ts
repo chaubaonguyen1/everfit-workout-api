@@ -22,6 +22,7 @@ describe('resolveHistoryFilters', () => {
       from: undefined,
       to: undefined,
       cursor: undefined,
+      cursorScope: expect.stringMatching(/^[0-9a-f]{16}$/),
       limit: DEFAULT_PAGE_SIZE,
     });
   });
@@ -63,13 +64,38 @@ describe('resolveHistoryFilters', () => {
     expect(resolve({ muscleGroup: ' Chest ' }).muscleGroup).toBe('chest');
   });
 
-  it('decodes a valid cursor and rejects a tampered one with INVALID_CURSOR', () => {
-    const cursor = {
-      performedAt: new Date('2026-10-14T00:00:00.000Z'),
-      id: '0b1f6c3e-8a2d-4f7e-9c1a-2b3c4d5e6f70',
-    };
+  describe('cursor', () => {
+    const issuedFor = (query: HistoryQueryInput) =>
+      encodeCursor({
+        performedAt: new Date('2026-10-14T00:00:00.000Z'),
+        id: '0b1f6c3e-8a2d-4f7e-9c1a-2b3c4d5e6f70',
+        scope: resolve(query).cursorScope,
+      });
 
-    expect(resolve({ cursor: encodeCursor(cursor) }).cursor).toEqual(cursor);
-    expect(failure({ cursor: 'tampered' }).code).toBe(ErrorCode.INVALID_CURSOR);
+    it('accepts a cursor issued for the same filters', () => {
+      const cursor = issuedFor({ exercise: 'bench' });
+
+      expect(resolve({ exercise: 'bench', cursor }).cursor?.id).toBe(
+        '0b1f6c3e-8a2d-4f7e-9c1a-2b3c4d5e6f70',
+      );
+    });
+
+    it('ignores output-only parameters when matching (unit/limit can change between pages)', () => {
+      const cursor = issuedFor({ exercise: 'bench', limit: 10 });
+
+      expect(() => resolve({ exercise: 'BENCH ', limit: 50, cursor })).not.toThrow();
+    });
+
+    it('rejects a cursor reused with different filters', () => {
+      const cursor = issuedFor({ exercise: 'bench' });
+
+      const error = failure({ exercise: 'squat', cursor });
+      expect(error.code).toBe(ErrorCode.INVALID_CURSOR);
+      expect(error.message).toMatch(/different filters/);
+    });
+
+    it('rejects a tampered cursor', () => {
+      expect(failure({ cursor: 'tampered' }).code).toBe(ErrorCode.INVALID_CURSOR);
+    });
   });
 });

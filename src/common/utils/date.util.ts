@@ -99,6 +99,20 @@ export function zonedWallTimeToUtc(wall: WallTime, timeZone: string): Date {
   return new Date(matches[0] ?? wallMs - offsetBefore);
 }
 
+// Postgres timestamptz accepts more, but JSON/ISO round-trips are only unambiguous for 4-digit
+// years: toISOString() switches to "+010000-…" past 9999, which the database rejects.
+const MIN_INSTANT_MS = Date.parse('0001-01-01T00:00:00.000Z');
+const MAX_INSTANT_MS = Date.parse('9999-12-31T23:59:59.999Z');
+
+/** @throws RangeError when the instant cannot be stored/round-tripped (outside years 0001–9999). */
+export function assertSupportedInstant(instant: Date): Date {
+  const ms = instant.getTime();
+  if (!(ms >= MIN_INSTANT_MS && ms <= MAX_INSTANT_MS)) {
+    throw new RangeError('must be between years 0001 and 9999');
+  }
+  return instant;
+}
+
 /**
  * Parses an ISO-8601 date or date-time into a UTC instant.
  * @throws RangeError with a client-safe message when the input or time zone is invalid.
@@ -111,7 +125,7 @@ export function parseInstant(input: string, timeZone: string = DEFAULT_TIME_ZONE
   const dateOnly = DATE_ONLY.exec(input);
   if (dateOnly) {
     const wall = toWall(dateOnly.slice(1, 4), ['0', '0', '0', '0']);
-    return zonedWallTimeToUtc(wall, timeZone);
+    return assertSupportedInstant(zonedWallTimeToUtc(wall, timeZone));
   }
 
   const dateTime = DATE_TIME.exec(input);
@@ -121,10 +135,10 @@ export function parseInstant(input: string, timeZone: string = DEFAULT_TIME_ZONE
 
   const [, y, mo, d, h, mi, s = '0', fraction = '0', offset] = dateTime;
   const wall = toWall([y, mo, d], [h, mi, s, fraction.padEnd(3, '0').slice(0, 3)]);
-  if (!offset) return zonedWallTimeToUtc(wall, timeZone);
+  if (!offset) return assertSupportedInstant(zonedWallTimeToUtc(wall, timeZone));
 
   const offsetMs = offset.toUpperCase() === 'Z' ? 0 : parseOffsetMs(offset);
-  return new Date(wallTimeAsUtcMs(wall) - offsetMs);
+  return assertSupportedInstant(new Date(wallTimeAsUtcMs(wall) - offsetMs));
 }
 
 /**
@@ -139,7 +153,7 @@ export function parseRangeEnd(input: string, timeZone: string = DEFAULT_TIME_ZON
   parseInstant(input, timeZone); // validates the calendar date and the zone
   const [year, month, day] = dateOnly.slice(1, 4).map(Number);
   const nextDay = new Date(Date.UTC(year, month - 1, day + 1));
-  return zonedWallTimeToUtc(
+  const end = zonedWallTimeToUtc(
     {
       year: nextDay.getUTCFullYear(),
       month: nextDay.getUTCMonth() + 1,
@@ -151,6 +165,8 @@ export function parseRangeEnd(input: string, timeZone: string = DEFAULT_TIME_ZON
     },
     timeZone,
   );
+  // Through 9999-12-31 the exclusive end would be year 10000; clamp to the last representable ms.
+  return end.getTime() > MAX_INSTANT_MS ? new Date(MAX_INSTANT_MS) : end;
 }
 
 function toWall([y, mo, d]: string[], [h, mi, s, ms]: string[]): WallTime {
@@ -188,5 +204,10 @@ function parseOffsetMs(offset: string): number {
 }
 
 function wallTimeAsUtcMs(w: WallTime): number {
-  return Date.UTC(w.year, w.month - 1, w.day, w.hour, w.minute, w.second, w.millisecond);
+  const ms = Date.UTC(w.year, w.month - 1, w.day, w.hour, w.minute, w.second, w.millisecond);
+  if (w.year >= 100) return ms;
+  // Date.UTC maps years 0–99 to 1900–1999 (legacy quirk); set the real year explicitly.
+  const date = new Date(ms);
+  date.setUTCFullYear(w.year);
+  return date.getTime();
 }

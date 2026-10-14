@@ -1,7 +1,8 @@
 /**
  * Per-set training metrics. Computed once at write time and stored alongside the set, so PR
  * queries are plain indexed `ORDER BY … LIMIT 1` lookups instead of scans over computed values.
- * All inputs/outputs are in kilograms.
+ * The formulas are linear in weight, so they hold in any unit: callers pass kg when storing and
+ * the logged unit when presenting a set in the unit it was logged in.
  */
 
 export interface SetMetrics {
@@ -10,9 +11,9 @@ export interface SetMetrics {
 }
 
 /** Volume of a single set: reps × weight. */
-export function setVolume(weightKg: number, reps: number): number {
-  assertValidSet(weightKg, reps);
-  return weightKg * reps;
+export function setVolume(weight: number, reps: number): number {
+  assertValidSet(weight, reps);
+  return weight * reps;
 }
 
 /**
@@ -20,9 +21,9 @@ export function setVolume(weightKg: number, reps: number): number {
  * Note: applied literally for every rep count, so a true single (reps = 1) yields
  * weight × 1.0333 rather than the weight itself.
  */
-export function epleyOneRepMax(weightKg: number, reps: number): number {
-  assertValidSet(weightKg, reps);
-  return weightKg * (1 + reps / 30);
+export function epleyOneRepMax(weight: number, reps: number): number {
+  assertValidSet(weight, reps);
+  return weight * (1 + reps / 30);
 }
 
 export function computeSetMetrics(weightKg: number, reps: number): SetMetrics {
@@ -32,9 +33,9 @@ export function computeSetMetrics(weightKg: number, reps: number): SetMetrics {
   };
 }
 
-function assertValidSet(weightKg: number, reps: number): void {
-  if (!Number.isFinite(weightKg) || weightKg < 0) {
-    throw new RangeError(`weight must be a finite number >= 0, got ${weightKg}`);
+function assertValidSet(weight: number, reps: number): void {
+  if (!Number.isFinite(weight) || weight < 0) {
+    throw new RangeError(`weight must be a finite number >= 0, got ${weight}`);
   }
   if (!Number.isInteger(reps) || reps < 1) {
     throw new RangeError(`reps must be an integer >= 1, got ${reps}`);

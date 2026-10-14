@@ -4,6 +4,7 @@ import {
   KeysetCursor,
   assertRangeOrder,
   decodeCursor,
+  fingerprint,
   normalizeName,
   parseDateRange,
 } from '../../../common/utils';
@@ -28,6 +29,8 @@ export interface HistoryFilters {
   readonly from?: Date;
   readonly to?: Date;
   readonly cursor?: KeysetCursor;
+  /** Fingerprint of the row-selecting filters, embedded in the cursors issued for this query. */
+  readonly cursorScope: string;
   readonly limit: number;
 }
 
@@ -55,13 +58,25 @@ export function resolveHistoryFilters(
   if (problems.length > 0) throw new ValidationError('Invalid query parameters', problems);
   assertRangeOrder(range);
 
-  const term = query.exercise === undefined ? undefined : normalizeName(query.exercise);
+  const exerciseTerm =
+    (query.exercise === undefined ? undefined : normalizeName(query.exercise)) || undefined;
+  // Only filters that change which rows match; output unit and page size may vary between pages.
+  const cursorScope = fingerprint({ exerciseTerm, muscleGroup, from: range.from, to: range.to });
+  if (cursor && cursor.scope !== cursorScope) {
+    throw new DomainError(
+      ErrorCode.INVALID_CURSOR,
+      'cursor was issued for different filters; restart from the first page',
+      [{ field: 'cursor', issue: 'does not match the current filters' }],
+    );
+  }
+
   return {
-    exerciseTerm: term || undefined,
+    exerciseTerm,
     muscleGroup,
     from: range.from,
     to: range.to,
     cursor,
+    cursorScope,
     limit: query.limit ?? DEFAULT_PAGE_SIZE,
   };
 }

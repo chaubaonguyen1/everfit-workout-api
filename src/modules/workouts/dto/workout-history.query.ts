@@ -1,6 +1,15 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, IsTimeZone, Length, Max, Min } from 'class-validator';
+import {
+  IsInt,
+  IsOptional,
+  IsString,
+  IsTimeZone,
+  Length,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { SUPPORTED_WEIGHT_UNITS, WeightUnit } from '../../units/domain/weight-unit.registry';
 import { IsWeightUnit } from '../../units/validators/is-weight-unit.validator';
 import { DEFAULT_PAGE_SIZE } from '../domain/history-filters';
@@ -17,7 +26,8 @@ export class WorkoutHistoryQuery {
   @IsOptional()
   @Transform(trim)
   @IsString()
-  @Length(1, 100)
+  // Blank (`?exercise=`) means "no filter", handled in the domain, so only the max is enforced.
+  @MaxLength(100)
   readonly exercise?: string;
 
   @ApiPropertyOptional({ example: 'chest', description: 'See GET /exercises for available groups' })

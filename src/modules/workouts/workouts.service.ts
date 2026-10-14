@@ -33,7 +33,7 @@ export class WorkoutsService {
    */
   async getHistory(userId: string, query: WorkoutHistoryQuery): Promise<WorkoutHistoryResponse> {
     const filters = resolveHistoryFilters(query, this.exercises.muscleGroups);
-    const page = { limit: filters.limit, unit: query.unit };
+    const page = { limit: filters.limit, unit: query.unit, cursorScope: filters.cursorScope };
 
     let exerciseIds: string[] | undefined;
     if (filters.exerciseTerm || filters.muscleGroup) {

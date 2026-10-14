@@ -111,6 +111,17 @@ describe('parseInstant', () => {
   });
 });
 
+describe('supported instant range (what Postgres can round-trip)', () => {
+  it('rejects instants before year 1 or after 9999 instead of failing in the database', () => {
+    expect(() => parseInstant('9999-12-31T23:00:00-05:00')).toThrow(/between years 0001 and 9999/);
+    expect(() => parseInstant('0001-01-01T00:00:00+01:00')).toThrow(/between years 0001 and 9999/);
+  });
+
+  it('clamps a range ending on 9999-12-31 to the last representable instant', () => {
+    expect(iso(parseRangeEnd('9999-12-31'))).toBe('9999-12-31T23:59:59.999Z');
+  });
+});
+
 describe('parseRangeEnd', () => {
   it('turns a date-only value into the start of the next local day (whole day included)', () => {
     expect(iso(parseRangeEnd('2026-10-14', 'Asia/Ho_Chi_Minh'))).toBe('2026-10-14T17:00:00.000Z');

@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 /**
  * Deterministic JSON: object keys are sorted recursively so semantically equal payloads
  * serialize identically regardless of key order (used to fingerprint idempotent requests).
@@ -19,4 +21,9 @@ function sortKeys(value: unknown): unknown {
     );
   }
   return value;
+}
+
+/** Short, stable fingerprint of a value (16 hex chars of SHA-256 over its canonical JSON). */
+export function fingerprint(value: unknown): string {
+  return createHash('sha256').update(stableStringify(value)).digest('hex').slice(0, 16);
 }
