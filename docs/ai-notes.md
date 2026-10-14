@@ -88,3 +88,42 @@ Format: date · milestone · what the AI did · what was wrong / rejected · how
   `weight-conversion.spec.ts`; the agent inferred from file names instead of checking.
 - Kept `HealthController → PrismaService.ping()` and documented it as an explicit exception in
   CLAUDE.md (infrastructure probe, not data access).
+
+## M3 — Bulk workout logging
+- 2026-10-14 · Time zones: chose `Intl`-based conversion over adding a date library; correctness
+  pinned by DST tests (New York summer/winter, right after spring-forward) and by rejecting
+  impossible dates that `Date` silently rolls over (`2026-02-30` → March 2).
+- 2026-10-14 · Idempotency design: claim the key with `INSERT … ON CONFLICT DO NOTHING` *inside*
+  the write transaction. A concurrent duplicate blocks on the uncommitted key row until the
+  first commits, then replays its stored response. Rejected alternative: insert the key at the
+  end and catch P2002 — simpler, but every concurrent duplicate would do the full write first.
+- 2026-10-14 · Deadlock avoidance: exercises in a batch are created in sorted order, so two
+  concurrent batches introducing the same new exercises lock rows in the same order.
+- 2026-10-14 · Kept services Prisma-free with a `TransactionRunner` (unit of work + retry on
+  P2034) instead of calling `prisma.$transaction` from the service, per the layering rule.
+- 2026-10-14 · Test isolation (reviewer m10): each e2e test uses a fresh userId instead of
+  truncating tables — suites stay independent without cleanup-order coupling.
+
+## Review of M3 by the reviewer agent (`docs/reviews/m3-review.md`)
+- **Real bug in my code, confirmed before fixing:** DST-gap handling in `zonedWallTimeToUtc`.
+  A date-only `2026-09-06` in `America/Santiago` (clocks skip midnight) was stored as 23:00 on
+  Sep 5 local — the entry moved to the previous day. My DST tests only covered times *after* a
+  transition, never *inside* the gap. Reproduced with the built code first, then fixed with
+  "compatible" disambiguation (gap → forward, overlap → earlier) and added a full-year property
+  test (date-only never changes local day in 4 DST zones).
+- **Accepted:** name length checked after NFKC normalization (`'ﷺ'` expands to 18 chars) + map
+  P2000; map P2028 (tx timeout while waiting on a held key) to 503; warn-log DB errors mapped
+  to 4xx; TransactionRunner retry unit tests; stronger e2e (lb stored at full precision,
+  4 of 5 concurrent duplicates are replays); schema comment no longer promises a TTL job.
+- **Reviewer was right that my concurrency test proved less than its name:** it also passed if
+  requests ran sequentially. Added a deterministic test that holds an uncommitted claim in an
+  open transaction and asserts the HTTP request blocks until rollback.
+- **Rejected (after checking):** canonicalizing stored time zones via
+  `resolvedOptions().timeZone`. Node's ICU returns legacy CLDR ids
+  (`Asia/Ho_Chi_Minh` → `Asia/Saigon`, `Asia/Kolkata` → `Asia/Calcutta`), so clients would get
+  back a different name than they sent. Kept their spelling; only bounded the formatter cache.
+- **Rejected:** injecting a Clock — `prepareEntries` already takes `now`, so the only
+  time-dependent logic is pure and tested deterministically.
+- **To document in README:** time-zone rules (offset in `date` wins; `timezone` applies to
+  dates without offset and is stored as sent), replay returns 201 + `Idempotent-Replayed`,
+  global exercise table (first logger sets the display name).
