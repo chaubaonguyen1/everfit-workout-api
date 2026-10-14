@@ -25,13 +25,22 @@ Estimated **before** starting implementation (Wed 2026-10-14). Deadline: Fri 202
 - Timezone-aware period boundaries (DST, month ends) are easy to get subtly wrong → dedicated unit tests.
 
 ## Actual (filled in after completion)
-| Milestone | Actual | Notes |
-|---|---|---|
-| M0 | | |
-| M1 | | |
-| M2 | | |
-| M3 | | |
-| M4 | | |
-| M5 | | |
-| M6 | | |
-| M7 | | |
+Approximate active time, reconstructed from session and commit timestamps (Wed 2026-10-14,
+11:30–21:30 local, minus a ~5 h pause). AI-assisted throughout.
+
+| Milestone | Estimate | Actual | Notes |
+|---|---|---|---|
+| M0 Setup | 1.5h | ~0.5h | Plan revised once after review (reusable-code layer) |
+| M1 Foundation | 2h | ~0.7h | Two bugs found by e2e / Docker smoke test (body-parser errors, request id) |
+| M2 Data layer | 2.5h | ~0.6h | Dropped generated columns (Prisma drift) |
+| — Review tooling | not planned | ~1h | Review skill + 2 eval iterations + reviewer agent; paid off in every later milestone |
+| M3 Log workouts | 2.5h | ~1h | Incl. M3 review fixes (DST gap bug) |
+| M4 History | 2.5h | ~0.7h | Incl. M4 review fixes |
+| M5 Personal records | 3h | ~0.7h | |
+| M6 Performance | 1.5h | ~0.4h | Seed + EXPLAIN answered a review question directly |
+| M7 Docs | 2h | ~0.5h | |
+| **Total** | **17.5h** | **~6h** | Video not included |
+
+The estimate assumed mostly manual coding with AI help; in practice the agent wrote the code and
+the time went into specification, review and verification. The biggest under-estimate was review
+tooling, which wasn't in the plan at all.
