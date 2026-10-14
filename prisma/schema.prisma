@@ -1,0 +1,93 @@
+// Design notes (see README "Database design" for the full rationale):
+// - Timestamps are `timestamptz` and always written in UTC.
+// - Weights keep the original value + unit AND a normalized `weight_kg`.
+// - Per-set metrics (volume, Epley 1RM) are computed in application code at write time and
+//   stored, so personal-record lookups are single index scans.
+// - `user_id`, `exercise_id` and `performed_at` are denormalized onto `workout_sets` so PR
+//   queries never need a join.
+// - CHECK constraints live in hand-written SQL in the migrations (Prisma cannot express them).
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pg_trgm]
+}
+
+model Exercise {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// Display name as first logged / defined in the catalog.
+  name           String   @db.VarChar(100)
+  /// Lowercased, trimmed, whitespace-collapsed name: the identity of an exercise.
+  normalizedName String   @unique @map("normalized_name") @db.VarChar(100)
+  /// Populated from config/exercise-catalog.json; empty for exercises not in the catalog.
+  muscleGroups   String[] @default([]) @map("muscle_groups")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  entries WorkoutEntry[]
+  sets    WorkoutSet[]
+
+  // Partial-match search on exercise names (ILIKE '%bench%') via trigram index.
+  @@index([normalizedName(ops: raw("gin_trgm_ops"))], type: Gin, map: "exercises_normalized_name_trgm_idx")
+  @@index([muscleGroups], type: Gin)
+  @@map("exercises")
+}
+
+model WorkoutEntry {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @map("user_id") @db.VarChar(64)
+  exerciseId  String   @map("exercise_id") @db.Uuid
+  /// When the workout happened, in UTC.
+  performedAt DateTime @map("performed_at") @db.Timestamptz(3)
+  /// IANA timezone the client logged from (e.g. "Asia/Ho_Chi_Minh"), if provided.
+  timezone    String?  @db.VarChar(64)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  exercise Exercise     @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+  sets     WorkoutSet[]
+
+  // History: newest first, stable keyset pagination on (performed_at, id).
+  @@index([userId, performedAt(sort: Desc), id(sort: Desc)])
+  // History filtered by exercise(s).
+  @@index([userId, exerciseId, performedAt(sort: Desc), id(sort: Desc)])
+  @@map("workout_entries")
+}
+
+model WorkoutSet {
+  id       String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entryId  String  @map("entry_id") @db.Uuid
+  /// 0-based position of the set within its entry.
+  setIndex Int     @map("set_index") @db.SmallInt
+  reps     Int
+  /// Weight exactly as logged, in `unit`.
+  weight   Decimal @db.Decimal(10, 3)
+  /// Unit as logged. Plain text (not a PG enum) so adding a unit needs no migration;
+  /// validated against the unit registry at the API boundary.
+  unit     String  @db.VarChar(16)
+  weightKg Decimal @map("weight_kg") @db.Decimal(14, 6)
+  volumeKg Decimal @map("volume_kg") @db.Decimal(16, 6)
+  e1rmKg   Decimal @map("e1rm_kg") @db.Decimal(14, 6)
+
+  // Denormalized from the parent entry (immutable after insert) for join-free PR queries.
+  userId      String   @map("user_id") @db.VarChar(64)
+  exerciseId  String   @map("exercise_id") @db.Uuid
+  performedAt DateTime @map("performed_at") @db.Timestamptz(3)
+
+  entry    WorkoutEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  exercise Exercise     @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+
+  @@unique([entryId, setIndex])
+  // One index per PR type. Ties: `performed_at ASC` reports the FIRST time a record was
+  // achieved; `id` makes the order total, because all sets of one entry share `performed_at`
+  // (without it, equal sets in one entry would be returned in arbitrary order).
+  // Each PR query is answered by reading a single index entry.
+  @@index([userId, exerciseId, weightKg(sort: Desc), performedAt, id], map: "workout_sets_pr_weight_idx")
+  @@index([userId, exerciseId, volumeKg(sort: Desc), performedAt, id], map: "workout_sets_pr_volume_idx")
+  @@index([userId, exerciseId, e1rmKg(sort: Desc), performedAt, id], map: "workout_sets_pr_e1rm_idx")
+  @@map("workout_sets")
+}
