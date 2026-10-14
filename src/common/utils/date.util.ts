@@ -127,6 +127,32 @@ export function parseInstant(input: string, timeZone: string = DEFAULT_TIME_ZONE
   return new Date(wallTimeAsUtcMs(wall) - offsetMs);
 }
 
+/**
+ * Exclusive upper bound for a `[from, to)` range. A date-only value means "through the end of
+ * that local day", i.e. the start of the next local day; a date-time is used as given.
+ * @throws RangeError like {@link parseInstant}.
+ */
+export function parseRangeEnd(input: string, timeZone: string = DEFAULT_TIME_ZONE): Date {
+  const dateOnly = DATE_ONLY.exec(input);
+  if (!dateOnly) return parseInstant(input, timeZone);
+
+  parseInstant(input, timeZone); // validates the calendar date and the zone
+  const [year, month, day] = dateOnly.slice(1, 4).map(Number);
+  const nextDay = new Date(Date.UTC(year, month - 1, day + 1));
+  return zonedWallTimeToUtc(
+    {
+      year: nextDay.getUTCFullYear(),
+      month: nextDay.getUTCMonth() + 1,
+      day: nextDay.getUTCDate(),
+      hour: 0,
+      minute: 0,
+      second: 0,
+      millisecond: 0,
+    },
+    timeZone,
+  );
+}
+
 function toWall([y, mo, d]: string[], [h, mi, s, ms]: string[]): WallTime {
   const wall: WallTime = {
     year: Number(y),

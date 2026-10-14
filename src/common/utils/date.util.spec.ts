@@ -1,4 +1,10 @@
-import { isValidTimeZone, parseInstant, timeZoneOffsetMs, toWallTime } from './date.util';
+import {
+  isValidTimeZone,
+  parseInstant,
+  parseRangeEnd,
+  timeZoneOffsetMs,
+  toWallTime,
+} from './date.util';
 
 const iso = (d: Date) => d.toISOString();
 
@@ -102,6 +108,25 @@ describe('parseInstant', () => {
     it('rejects unknown time zones', () => {
       expect(() => parseInstant('2026-10-14', 'Mars/Olympus')).toThrow(/Unknown time zone/);
     });
+  });
+});
+
+describe('parseRangeEnd', () => {
+  it('turns a date-only value into the start of the next local day (whole day included)', () => {
+    expect(iso(parseRangeEnd('2026-10-14', 'Asia/Ho_Chi_Minh'))).toBe('2026-10-14T17:00:00.000Z');
+  });
+
+  it('rolls over month and year ends', () => {
+    expect(iso(parseRangeEnd('2026-12-31'))).toBe('2027-01-01T00:00:00.000Z');
+    expect(iso(parseRangeEnd('2028-02-28'))).toBe('2028-02-29T00:00:00.000Z');
+  });
+
+  it('uses date-times as given', () => {
+    expect(iso(parseRangeEnd('2026-10-14T12:00:00Z'))).toBe('2026-10-14T12:00:00.000Z');
+  });
+
+  it('validates like parseInstant', () => {
+    expect(() => parseRangeEnd('2026-02-30')).toThrow(/valid calendar/);
   });
 });
 
