@@ -6,7 +6,6 @@ export const ERROR_HTTP_STATUS: Readonly<Record<ErrorCode, HttpStatus>> = {
   [ErrorCode.VALIDATION_ERROR]: HttpStatus.BAD_REQUEST,
   [ErrorCode.MALFORMED_JSON]: HttpStatus.BAD_REQUEST,
   [ErrorCode.BAD_REQUEST]: HttpStatus.BAD_REQUEST,
-  [ErrorCode.UNSUPPORTED_UNIT]: HttpStatus.BAD_REQUEST,
   [ErrorCode.INVALID_CURSOR]: HttpStatus.BAD_REQUEST,
   [ErrorCode.INVALID_DATE_RANGE]: HttpStatus.BAD_REQUEST,
   [ErrorCode.NOT_FOUND]: HttpStatus.NOT_FOUND,
