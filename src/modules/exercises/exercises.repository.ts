@@ -89,6 +89,13 @@ export class ExercisesRepository {
     return rows.map((r) => r.id);
   }
 
+  findByNormalizedName(normalizedName: string): Promise<ExerciseRef | null> {
+    return this.prisma.exercise.findUnique({
+      where: { normalizedName },
+      select: { id: true, name: true },
+    });
+  }
+
   findAll(): Promise<ExerciseRecord[]> {
     return this.prisma.exercise.findMany({ select: EXERCISE_SELECT, orderBy: { name: 'asc' } });
   }

@@ -7,6 +7,7 @@ import { LoggerModule } from './infrastructure/logger/logger.module';
 import { PrismaModule } from './infrastructure/prisma/prisma.module';
 import { ExercisesModule } from './modules/exercises/exercises.module';
 import { UnitsModule } from './modules/units/units.module';
+import { PersonalRecordsModule } from './modules/personal-records/personal-records.module';
 import { WorkoutsModule } from './modules/workouts/workouts.module';
 
 @Module({
@@ -25,6 +26,7 @@ import { WorkoutsModule } from './modules/workouts/workouts.module';
     UnitsModule,
     ExercisesModule,
     WorkoutsModule,
+    PersonalRecordsModule,
   ],
 })
 export class AppModule {}

@@ -2,6 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { NotFoundError } from '../../common/errors';
+import { normalizeName } from '../../common/utils';
 import type { AppConfig } from '../../config/configuration';
 import { ExerciseCatalog, parseExerciseCatalog } from './domain/exercise-catalog';
 import type { Tx } from '../../infrastructure/prisma/transaction-runner';
@@ -43,6 +45,13 @@ export class ExercisesService implements OnApplicationBootstrap {
 
   findIdsMatching(filter: { term?: string; muscleGroup?: string }): Promise<string[]> {
     return this.repository.findIdsMatching(filter);
+  }
+
+  /** Exact (normalized) name lookup: "bench  PRESS" finds "Bench Press". */
+  async getByName(name: string): Promise<ExerciseRef> {
+    const exercise = await this.repository.findByNormalizedName(normalizeName(name));
+    if (!exercise) throw new NotFoundError(`Exercise "${name}" not found`);
+    return exercise;
   }
 
   findAll(): Promise<ExerciseRecord[]> {
