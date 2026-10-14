@@ -2,10 +2,10 @@ import { DomainError, ErrorCode, ErrorDetail, ValidationError } from '../../../c
 import {
   DEFAULT_TIME_ZONE,
   KeysetCursor,
+  assertRangeOrder,
   decodeCursor,
   normalizeName,
-  parseInstant,
-  parseRangeEnd,
+  parseDateRange,
 } from '../../../common/utils';
 
 export const DEFAULT_PAGE_SIZE = 20;
@@ -41,10 +41,8 @@ export function resolveHistoryFilters(
 ): HistoryFilters {
   const cursor = query.cursor === undefined ? undefined : resolveCursor(query.cursor);
   const problems: ErrorDetail[] = [];
-  const timeZone = query.timezone ?? DEFAULT_TIME_ZONE;
 
-  const from = parseBoundary('from', query.from, (v) => parseInstant(v, timeZone), problems);
-  const to = parseBoundary('to', query.to, (v) => parseRangeEnd(v, timeZone), problems);
+  const range = parseDateRange(query, query.timezone ?? DEFAULT_TIME_ZONE, problems);
 
   const muscleGroup = query.muscleGroup?.trim().toLowerCase();
   if (muscleGroup !== undefined && !knownMuscleGroups.includes(muscleGroup)) {
@@ -55,19 +53,14 @@ export function resolveHistoryFilters(
   }
 
   if (problems.length > 0) throw new ValidationError('Invalid query parameters', problems);
-
-  if (from && to && from.getTime() >= to.getTime()) {
-    throw new DomainError(ErrorCode.INVALID_DATE_RANGE, '`from` must be before `to`', [
-      { field: 'from', issue: `must be before ${to.toISOString()} (exclusive end of \`to\`)` },
-    ]);
-  }
+  assertRangeOrder(range);
 
   const term = query.exercise === undefined ? undefined : normalizeName(query.exercise);
   return {
     exerciseTerm: term || undefined,
     muscleGroup,
-    from,
-    to,
+    from: range.from,
+    to: range.to,
     cursor,
     limit: query.limit ?? DEFAULT_PAGE_SIZE,
   };
@@ -80,20 +73,5 @@ function resolveCursor(token: string): KeysetCursor {
     throw new DomainError(ErrorCode.INVALID_CURSOR, (error as Error).message, [
       { field: 'cursor', issue: 'is invalid' },
     ]);
-  }
-}
-
-function parseBoundary(
-  field: 'from' | 'to',
-  value: string | undefined,
-  parse: (value: string) => Date,
-  problems: ErrorDetail[],
-): Date | undefined {
-  if (value === undefined) return undefined;
-  try {
-    return parse(value);
-  } catch (error) {
-    problems.push({ field, issue: error instanceof RangeError ? error.message : 'is invalid' });
-    return undefined;
   }
 }
