@@ -41,6 +41,10 @@ export class ExercisesService implements OnApplicationBootstrap {
     return this.repository.resolveIds(tx, exercises);
   }
 
+  findIdsMatching(filter: { term?: string; muscleGroup?: string }): Promise<string[]> {
+    return this.repository.findIdsMatching(filter);
+  }
+
   findAll(): Promise<ExerciseRecord[]> {
     return this.repository.findAll();
   }

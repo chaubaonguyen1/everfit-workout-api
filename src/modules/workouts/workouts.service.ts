@@ -2,10 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { TransactionRunner } from '../../infrastructure/prisma/transaction-runner';
 import { ExercisesService } from '../exercises/exercises.service';
 import { IdempotencyService } from '../idempotency/idempotency.service';
+import { UnitConverterService } from '../units/unit-converter.service';
+import { resolveHistoryFilters } from './domain/history-filters';
 import { distinctExercises, prepareEntries } from './domain/prepare-entries';
 import { CreateWorkoutsDto } from './dto/create-workouts.dto';
 import { LoggedWorkoutsResponse } from './dto/logged-workouts.response';
-import { toLoggedWorkoutsResponse } from './workouts.mapper';
+import { WorkoutHistoryQuery } from './dto/workout-history.query';
+import { WorkoutHistoryResponse } from './dto/workout-history.response';
+import { toLoggedWorkoutsResponse, toWorkoutHistoryResponse } from './workouts.mapper';
 import { WorkoutsRepository } from './workouts.repository';
 
 export interface LogWorkoutsResult {
@@ -21,7 +25,41 @@ export class WorkoutsService {
     private readonly repository: WorkoutsRepository,
     private readonly exercises: ExercisesService,
     private readonly idempotency: IdempotencyService,
+    private readonly units: UnitConverterService,
   ) {}
+
+  /**
+   * A page of the user's workout history, newest first. Exercise filters (name / muscle group)
+   * are resolved to exercise ids first, against the small exercises table, so the entries query
+   * stays a single index-ordered scan of the user's rows.
+   */
+  async getHistory(userId: string, query: WorkoutHistoryQuery): Promise<WorkoutHistoryResponse> {
+    const filters = resolveHistoryFilters(query, this.exercises.muscleGroups);
+    const page = { limit: filters.limit, unit: query.unit };
+
+    let exerciseIds: string[] | undefined;
+    if (filters.exerciseTerm || filters.muscleGroup) {
+      exerciseIds = await this.exercises.findIdsMatching({
+        term: filters.exerciseTerm,
+        muscleGroup: filters.muscleGroup,
+      });
+      if (exerciseIds.length === 0) {
+        return toWorkoutHistoryResponse({ ...page, rows: [], sets: [] }, this.units);
+      }
+    }
+
+    const rows = await this.repository.findHistoryPage(userId, {
+      exerciseIds,
+      from: filters.from,
+      to: filters.to,
+      cursor: filters.cursor,
+      take: filters.limit + 1,
+    });
+    const sets = await this.repository.findSetsForEntries(
+      rows.slice(0, filters.limit).map((r) => r.id),
+    );
+    return toWorkoutHistoryResponse({ ...page, rows, sets }, this.units);
+  }
 
   /**
    * Logs a batch of entries atomically: either every entry and set is stored, or none is.

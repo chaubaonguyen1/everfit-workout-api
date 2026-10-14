@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { escapeLike } from '../../common/utils';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import type { Tx } from '../../infrastructure/prisma/transaction-runner';
 import type { CatalogExercise } from './domain/exercise-catalog';
@@ -66,6 +68,25 @@ export class ExercisesRepository {
       select: { id: true, name: true, normalizedName: true },
     });
     return new Map(rows.map((r) => [r.normalizedName, { id: r.id, name: r.name }]));
+  }
+
+  /**
+   * Ids of exercises whose normalized name contains `term` and/or that train `muscleGroup`.
+   * LIKE wildcards in the term are escaped; the trigram index serves the substring match.
+   */
+  async findIdsMatching(filter: { term?: string; muscleGroup?: string }): Promise<string[]> {
+    const conditions: Prisma.Sql[] = [];
+    if (filter.term) {
+      conditions.push(Prisma.sql`normalized_name LIKE ${`%${escapeLike(filter.term)}%`}`);
+    }
+    if (filter.muscleGroup) {
+      conditions.push(Prisma.sql`muscle_groups @> ARRAY[${filter.muscleGroup}]::text[]`);
+    }
+    if (conditions.length === 0) return [];
+
+    const rows = await this.prisma.$queryRaw<{ id: string }[]>`
+      SELECT id FROM exercises WHERE ${Prisma.join(conditions, ' AND ')}`;
+    return rows.map((r) => r.id);
   }
 
   findAll(): Promise<ExerciseRecord[]> {

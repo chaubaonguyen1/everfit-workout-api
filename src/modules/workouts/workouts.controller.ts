@@ -1,5 +1,5 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, Res } from '@nestjs/common';
-import { ApiCreatedResponse, ApiHeader, ApiParam, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, Res } from '@nestjs/common';
+import { ApiCreatedResponse, ApiHeader, ApiOkResponse, ApiParam, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import {
   IDEMPOTENCY_KEY_HEADER,
@@ -8,6 +8,8 @@ import {
 import { UserIdParam } from '../../common/decorators/user-id.decorator';
 import { CreateWorkoutsDto } from './dto/create-workouts.dto';
 import { LoggedWorkoutsResponse } from './dto/logged-workouts.response';
+import { WorkoutHistoryQuery } from './dto/workout-history.query';
+import { WorkoutHistoryResponse } from './dto/workout-history.response';
 import { WorkoutsService } from './workouts.service';
 
 export const IDEMPOTENT_REPLAY_HEADER = 'Idempotent-Replayed';
@@ -17,6 +19,15 @@ export const IDEMPOTENT_REPLAY_HEADER = 'Idempotent-Replayed';
 @Controller('users/:userId/workouts')
 export class WorkoutsController {
   constructor(private readonly workouts: WorkoutsService) {}
+
+  @Get()
+  @ApiOkResponse({ type: WorkoutHistoryResponse })
+  history(
+    @UserIdParam() userId: string,
+    @Query() query: WorkoutHistoryQuery,
+  ): Promise<WorkoutHistoryResponse> {
+    return this.workouts.getHistory(userId, query);
+  }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
