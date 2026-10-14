@@ -33,6 +33,51 @@ describe('parseInstant', () => {
       );
     });
 
+    describe('DST transitions (compatible disambiguation)', () => {
+      it.each([
+        // [input, zone, expected UTC, why]
+        ['2026-03-08T02:30', 'America/New_York', '2026-03-08T07:30:00.000Z', 'gap → 03:30 EDT'],
+        [
+          '2026-11-01T01:30',
+          'America/New_York',
+          '2026-11-01T05:30:00.000Z',
+          'overlap → earlier (EDT)',
+        ],
+        [
+          '2026-09-06',
+          'America/Santiago',
+          '2026-09-06T04:00:00.000Z',
+          'midnight gap stays on Sep 6',
+        ],
+        [
+          '2026-03-29',
+          'Atlantic/Azores',
+          '2026-03-29T01:00:00.000Z',
+          'midnight gap stays on Mar 29',
+        ],
+        [
+          '2026-04-24',
+          'Africa/Cairo',
+          '2026-04-23T22:00:00.000Z',
+          'positive-offset zone, gap at 00:00',
+        ],
+      ])('%s in %s → %s (%s)', (input, zone, expected) => {
+        expect(iso(parseInstant(input, zone))).toBe(expected);
+      });
+
+      it('never moves a date-only input to the previous local day', () => {
+        const zones = ['America/Santiago', 'Atlantic/Azores', 'America/Havana', 'America/New_York'];
+        for (const zone of zones) {
+          for (let day = 1; day <= 365; day++) {
+            const date = new Date(Date.UTC(2026, 0, day)).toISOString().slice(0, 10);
+            const local = toWallTime(parseInstant(date, zone), zone);
+            const localDate = `${local.year}-${String(local.month).padStart(2, '0')}-${String(local.day).padStart(2, '0')}`;
+            expect(`${zone} ${localDate}`).toBe(`${zone} ${date}`);
+          }
+        }
+      });
+    });
+
     it('resolves times right after a DST change correctly', () => {
       // New York switched to EDT (-4) at 2026-03-08 02:00 local.
       expect(iso(parseInstant('2026-03-08T03:30', 'America/New_York'))).toBe(

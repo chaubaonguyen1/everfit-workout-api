@@ -72,15 +72,27 @@ export function timeZoneOffsetMs(instant: Date, timeZone: string): number {
   return wallTimeAsUtcMs(toWallTime(instant, timeZone)) - instant.getTime();
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 /**
- * UTC instant of a wall-clock time in `timeZone`. Uses the offset at the guessed instant, then
- * re-checks it, so times on either side of a DST change resolve to the correct offset.
+ * UTC instant of a wall-clock time in `timeZone`, with the same rules as java.time / Temporal's
+ * "compatible" disambiguation:
+ * - normal time → the single matching instant;
+ * - overlap (clocks set back, the wall time happens twice) → the earlier instant;
+ * - gap (clocks set forward, the wall time never happens) → shifted forward by the gap length,
+ *   so e.g. a date-only input in a zone that skips midnight still lands on that same day.
+ * Candidates use the offsets a day before and after, which bracket any single transition.
  */
 export function zonedWallTimeToUtc(wall: WallTime, timeZone: string): Date {
   const wallMs = wallTimeAsUtcMs(wall);
-  const firstGuess = wallMs - timeZoneOffsetMs(new Date(wallMs), timeZone);
-  const correctedOffset = timeZoneOffsetMs(new Date(firstGuess), timeZone);
-  return new Date(wallMs - correctedOffset);
+  const offsetBefore = timeZoneOffsetMs(new Date(wallMs - DAY_MS), timeZone);
+  const offsetAfter = timeZoneOffsetMs(new Date(wallMs + DAY_MS), timeZone);
+
+  const matches = [wallMs - offsetBefore, wallMs - offsetAfter]
+    .filter((candidate) => wallTimeAsUtcMs(toWallTime(new Date(candidate), timeZone)) === wallMs)
+    .sort((a, b) => a - b);
+
+  return new Date(matches[0] ?? wallMs - offsetBefore);
 }
 
 /**
