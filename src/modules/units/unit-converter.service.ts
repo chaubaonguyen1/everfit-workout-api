@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DomainError, ErrorCode } from '../../common/errors';
-import { roundTo } from '../../common/utils';
-import { fromKg, toKg } from './domain/weight-conversion';
+import { toKg } from './domain/weight-conversion';
+import { OriginalWeight, presentWeight } from './domain/weight-presentation';
 import {
   CANONICAL_WEIGHT_UNIT,
   SUPPORTED_WEIGHT_UNITS,
@@ -9,17 +9,12 @@ import {
   isWeightUnit,
 } from './domain/weight-unit.registry';
 
-/** Decimal places used when presenting weights to clients. */
-export const PRESENTATION_DECIMALS = 2;
-
-export interface OriginalWeight {
-  readonly weight: number;
-  readonly unit: WeightUnit;
-}
+export { PRESENTATION_DECIMALS } from './domain/weight-presentation';
+export type { OriginalWeight } from './domain/weight-presentation';
 
 /**
  * Injectable facade over the pure unit functions: validates untrusted unit strings and
- * formats weights for output. Business code depends on this instead of the registry directly.
+ * formats weights for output.
  */
 @Injectable()
 export class UnitConverterService {
@@ -37,12 +32,7 @@ export class UnitConverterService {
     return toKg(weight, unit);
   }
 
-  /**
-   * Weight to show the client in `unit`. When the set was logged in that same unit we return the
-   * original number, so 225 lb never comes back as 224.99 after a kg round-trip.
-   */
   present(weightKg: number, unit: WeightUnit, original?: OriginalWeight): number {
-    const value = original?.unit === unit ? original.weight : fromKg(weightKg, unit);
-    return roundTo(value, PRESENTATION_DECIMALS);
+    return presentWeight(weightKg, unit, original);
   }
 }

@@ -1,7 +1,6 @@
 import { encodeCursor, roundTo } from '../../common/utils';
 import type { WeightUnit } from '../units/domain/weight-unit.registry';
-import type { UnitConverterService } from '../units/unit-converter.service';
-import { epleyOneRepMax, setVolume } from './domain/set-metrics';
+import { presentSet } from './domain/present-set';
 import { LoggedEntryResponse, LoggedWorkoutsResponse } from './dto/logged-workouts.response';
 import {
   HistoryEntryResponse,
@@ -45,10 +44,12 @@ export interface HistoryPageInput {
   readonly unit?: WeightUnit;
 }
 
-export function toWorkoutHistoryResponse(
-  { rows, sets, limit, unit }: HistoryPageInput,
-  units: UnitConverterService,
-): WorkoutHistoryResponse {
+export function toWorkoutHistoryResponse({
+  rows,
+  sets,
+  limit,
+  unit,
+}: HistoryPageInput): WorkoutHistoryResponse {
   const page = rows.slice(0, limit);
   const hasMore = rows.length > limit;
   const last = page[page.length - 1];
@@ -61,7 +62,7 @@ export function toWorkoutHistoryResponse(
   }
 
   return {
-    data: page.map((row) => toHistoryEntry(row, setsByEntry.get(row.id) ?? [], unit, units)),
+    data: page.map((row) => toHistoryEntry(row, setsByEntry.get(row.id) ?? [], unit)),
     pageInfo: {
       limit,
       hasMore,
@@ -76,7 +77,6 @@ function toHistoryEntry(
   row: HistoryEntryRow,
   sets: readonly HistorySetRow[],
   unit: WeightUnit | undefined,
-  units: UnitConverterService,
 ): HistoryEntryResponse {
   return {
     id: row.id,
@@ -85,33 +85,10 @@ function toHistoryEntry(
     muscleGroups: row.muscleGroups,
     performedAt: row.performedAt.toISOString(),
     timezone: row.timezone,
-    sets: sets.map((set) => toHistorySet(set, unit, units)),
+    sets: sets.map((set) => toHistorySet(set, unit)),
   };
 }
 
-/**
- * Presents a set in `unit`. When that is the unit it was logged in, values are derived from the
- * original weight (so 225 lb stays 225, not 224.99 after a kg round-trip); otherwise from kg.
- */
-function toHistorySet(
-  set: HistorySetRow,
-  requestedUnit: WeightUnit | undefined,
-  units: UnitConverterService,
-): HistorySetResponse {
-  const loggedUnit = units.parseUnit(set.unit);
-  const unit = requestedUnit ?? loggedUnit;
-  const original = (value: number) => ({ weight: value, unit: loggedUnit });
-
-  return {
-    setIndex: set.setIndex,
-    reps: set.reps,
-    weight: units.present(set.weightKg, unit, original(set.weight)),
-    unit,
-    volume: units.present(set.volumeKg, unit, original(setVolume(set.weight, set.reps))),
-    estimatedOneRepMax: units.present(
-      set.e1rmKg,
-      unit,
-      original(epleyOneRepMax(set.weight, set.reps)),
-    ),
-  };
+function toHistorySet(set: HistorySetRow, unit: WeightUnit | undefined): HistorySetResponse {
+  return { setIndex: set.setIndex, ...presentSet(set, unit) };
 }

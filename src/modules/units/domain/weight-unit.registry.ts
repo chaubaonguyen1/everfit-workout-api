@@ -26,3 +26,12 @@ export const SUPPORTED_WEIGHT_UNITS: readonly WeightUnit[] = Object.freeze(
 export function isWeightUnit(value: unknown): value is WeightUnit {
   return typeof value === 'string' && Object.hasOwn(WEIGHT_UNITS, value);
 }
+
+/**
+ * Narrows a unit read from storage. Units are validated on write, so failure here means a unit
+ * was removed from the registry while data still uses it — a data-integrity bug, not client error.
+ */
+export function toWeightUnit(value: string): WeightUnit {
+  if (isWeightUnit(value)) return value;
+  throw new Error(`Stored weight unit "${value}" is not in the unit registry`);
+}

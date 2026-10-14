@@ -6,6 +6,8 @@ import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import type { Tx } from '../../infrastructure/prisma/transaction-runner';
 import type { ExerciseRef } from '../exercises/exercises.repository';
 import type { PreparedEntry, PreparedSet } from './domain/prepare-entries';
+import type { StoredSet } from './domain/present-set';
+import { toWeightUnit } from '../units/domain/weight-unit.registry';
 
 export interface CreatedEntry {
   readonly id: string;
@@ -33,15 +35,9 @@ export interface HistoryEntryRow {
   readonly timezone: string | null;
 }
 
-export interface HistorySetRow {
+export interface HistorySetRow extends StoredSet {
   readonly entryId: string;
   readonly setIndex: number;
-  readonly reps: number;
-  readonly weight: number;
-  readonly unit: string;
-  readonly weightKg: number;
-  readonly volumeKg: number;
-  readonly e1rmKg: number;
 }
 
 @Injectable()
@@ -106,6 +102,7 @@ export class WorkoutsRepository {
     // Decimal → number at the repository boundary; values fit comfortably in a double.
     return rows.map((r) => ({
       ...r,
+      unit: toWeightUnit(r.unit),
       weight: r.weight.toNumber(),
       weightKg: r.weightKg.toNumber(),
       volumeKg: r.volumeKg.toNumber(),

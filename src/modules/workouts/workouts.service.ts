@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { TransactionRunner } from '../../infrastructure/prisma/transaction-runner';
 import { ExercisesService } from '../exercises/exercises.service';
 import { IdempotencyService } from '../idempotency/idempotency.service';
-import { UnitConverterService } from '../units/unit-converter.service';
 import { resolveHistoryFilters } from './domain/history-filters';
 import { distinctExercises, prepareEntries } from './domain/prepare-entries';
 import { CreateWorkoutsDto } from './dto/create-workouts.dto';
@@ -25,7 +24,6 @@ export class WorkoutsService {
     private readonly repository: WorkoutsRepository,
     private readonly exercises: ExercisesService,
     private readonly idempotency: IdempotencyService,
-    private readonly units: UnitConverterService,
   ) {}
 
   /**
@@ -44,7 +42,7 @@ export class WorkoutsService {
         muscleGroup: filters.muscleGroup,
       });
       if (exerciseIds.length === 0) {
-        return toWorkoutHistoryResponse({ ...page, rows: [], sets: [] }, this.units);
+        return toWorkoutHistoryResponse({ ...page, rows: [], sets: [] });
       }
     }
 
@@ -58,7 +56,7 @@ export class WorkoutsService {
     const sets = await this.repository.findSetsForEntries(
       rows.slice(0, filters.limit).map((r) => r.id),
     );
-    return toWorkoutHistoryResponse({ ...page, rows, sets }, this.units);
+    return toWorkoutHistoryResponse({ ...page, rows, sets });
   }
 
   /**
