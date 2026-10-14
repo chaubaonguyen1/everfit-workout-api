@@ -1,4 +1,5 @@
 import { ArgumentsHost, HttpException, Logger, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { DomainError, ErrorCode, ValidationError } from '../errors';
 import { AllExceptionsFilter } from './all-exceptions.filter';
 
@@ -63,6 +64,19 @@ describe('AllExceptionsFilter', () => {
 
     expect(status).toHaveBeenCalledWith(405);
     expect(json.mock.calls[0][0].error.code).toBe(ErrorCode.BAD_REQUEST);
+  });
+
+  it('maps known database errors (e.g. unique violation) via the Prisma error helper', () => {
+    const { host, status, json } = createHost();
+    const error = new Prisma.PrismaClientKnownRequestError('duplicate key', {
+      code: 'P2002',
+      clientVersion: 'test',
+    });
+
+    filter.catch(error, host);
+
+    expect(status).toHaveBeenCalledWith(409);
+    expect(json.mock.calls[0][0].error.code).toBe(ErrorCode.CONFLICT);
   });
 
   it('hides internals of unexpected errors behind an opaque 500 and logs them', () => {

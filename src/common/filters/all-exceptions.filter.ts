@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { DomainError, ErrorCode, ErrorDetail } from '../errors';
+import { mapPrismaError } from '../helpers/prisma-error.helper';
 import { ERROR_HTTP_STATUS, codeForHttpStatus } from './error-http-status';
 
 export interface ErrorResponseBody {
@@ -62,12 +63,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
   }
 
   private normalize(exception: unknown): NormalizedError {
-    if (exception instanceof DomainError) {
+    const domainError = exception instanceof DomainError ? exception : mapPrismaError(exception);
+    if (domainError) {
       return {
-        status: ERROR_HTTP_STATUS[exception.code],
-        code: exception.code,
-        message: exception.message,
-        details: exception.details,
+        status: ERROR_HTTP_STATUS[domainError.code],
+        code: domainError.code,
+        message: domainError.message,
+        details: domainError.details,
       };
     }
 
