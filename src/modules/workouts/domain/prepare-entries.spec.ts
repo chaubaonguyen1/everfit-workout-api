@@ -84,6 +84,18 @@ describe('prepareEntries', () => {
     expect(() => prepareEntries([entry({ date: '2026-10-15T06:00:00Z' })], { now })).not.toThrow();
   });
 
+  it('rejects names that only exceed the column length after Unicode normalization', () => {
+    // 'ﷺ' is one character but expands to 18 under NFKC: 10 of them pass a 100-char DTO check.
+    const name = 'ﷺ'.repeat(10);
+
+    expect(errorsOf(() => prepareEntries([entry({ exerciseName: name })], { now }))).toEqual([
+      {
+        field: 'entries[0].exerciseName',
+        issue: 'must be at most 100 characters once normalized',
+      },
+    ]);
+  });
+
   it('rejects absurdly old dates', () => {
     expect(errorsOf(() => prepareEntries([entry({ date: '1850-01-01' })], { now }))).toEqual([
       { field: 'entries[0].date', issue: 'must not be before 1900-01-01' },

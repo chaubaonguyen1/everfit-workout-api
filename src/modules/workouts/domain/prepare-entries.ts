@@ -7,6 +7,8 @@ import { computeSetMetrics } from './set-metrics';
 /** How far in the future a workout may be dated (tolerates client clock skew / time zones). */
 export const MAX_FUTURE_SKEW_MS = 24 * 60 * 60 * 1000;
 const EARLIEST_ALLOWED = Date.UTC(1900, 0, 1);
+/** Matches `exercises.normalized_name VARCHAR(100)`. */
+export const MAX_EXERCISE_NAME_LENGTH = 100;
 
 export interface SetInput {
   readonly reps: number;
@@ -63,9 +65,18 @@ export function prepareEntries(
     }
 
     const name = entry.exerciseName.trim().replace(/\s+/g, ' ');
+    const normalizedName = normalizeName(name);
+    // Checked after normalization: NFKC + lowercasing can lengthen a string ('ﷺ' → 18 chars),
+    // so the DTO's length check alone cannot guarantee it fits the column.
+    if (normalizedName.length > MAX_EXERCISE_NAME_LENGTH) {
+      problems.push({
+        field: `entries[${i}].exerciseName`,
+        issue: `must be at most ${MAX_EXERCISE_NAME_LENGTH} characters once normalized`,
+      });
+    }
     return {
       performedAt: performedAt ?? new Date(Number.NaN),
-      exercise: { name, normalizedName: normalizeName(name) },
+      exercise: { name, normalizedName },
       sets: entry.sets.map((set, setIndex) => prepareSet(set, setIndex)),
     };
   });

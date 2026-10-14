@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import type { Request, Response } from 'express';
 import { DomainError, ErrorCode, ErrorDetail } from '../errors';
 import { mapPrismaError } from '../helpers/prisma-error.helper';
@@ -47,6 +48,18 @@ export class AllExceptionsFilter implements ExceptionFilter {
       this.logger.error(
         { err: exception, method: request.method, url: request.url },
         'Unhandled error while processing request',
+      );
+    } else if (exception instanceof Prisma.PrismaClientKnownRequestError) {
+      // Mapped to a 4xx, but a DB constraint firing usually means validation missed a case:
+      // keep a server-side trace instead of letting it look like an ordinary client error.
+      this.logger.warn(
+        {
+          prismaCode: exception.code,
+          meta: exception.meta,
+          method: request.method,
+          url: request.url,
+        },
+        'Database error mapped to client error',
       );
     }
 

@@ -10,6 +10,8 @@ const known = (code: string) =>
 
 describe('mapPrismaError', () => {
   it.each([
+    ['P2000', ErrorCode.VALIDATION_ERROR],
+    ['P2028', ErrorCode.SERVICE_UNAVAILABLE],
     ['P2002', ErrorCode.CONFLICT],
     ['P2003', ErrorCode.VALIDATION_ERROR],
     ['P2025', ErrorCode.NOT_FOUND],

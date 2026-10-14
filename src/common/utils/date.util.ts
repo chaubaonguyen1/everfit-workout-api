@@ -22,23 +22,27 @@ export interface WallTime {
   readonly millisecond: number;
 }
 
+/**
+ * Formatter cache keyed by *canonical* zone names only, so it is bounded by the IANA database
+ * size no matter how many spellings clients send ("asia/ho_chi_minh", "ASIA/HO_CHI_MINH", …).
+ */
 const formatters = new Map<string, Intl.DateTimeFormat>();
 
 function formatterFor(timeZone: string): Intl.DateTimeFormat {
-  let formatter = formatters.get(timeZone);
-  if (!formatter) {
-    formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      hourCycle: 'h23',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-    formatters.set(timeZone, formatter);
-  }
+  const cached = formatters.get(timeZone);
+  if (cached) return cached;
+
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+  formatters.set(formatter.resolvedOptions().timeZone, formatter);
   return formatter;
 }
 

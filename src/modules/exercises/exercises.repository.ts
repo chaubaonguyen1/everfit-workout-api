@@ -52,16 +52,16 @@ export class ExercisesRepository {
    * Pass exercises sorted by normalizedName so concurrent batches acquire row locks in one order.
    */
   async resolveIds(
-    db: Tx,
+    tx: Tx,
     exercises: readonly { name: string; normalizedName: string }[],
   ): Promise<Map<string, ExerciseRef>> {
     if (exercises.length === 0) return new Map();
 
-    await db.exercise.createMany({
+    await tx.exercise.createMany({
       data: exercises.map(({ name, normalizedName }) => ({ name, normalizedName })),
       skipDuplicates: true,
     });
-    const rows = await db.exercise.findMany({
+    const rows = await tx.exercise.findMany({
       where: { normalizedName: { in: exercises.map((e) => e.normalizedName) } },
       select: { id: true, name: true, normalizedName: true },
     });

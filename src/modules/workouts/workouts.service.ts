@@ -34,7 +34,10 @@ export class WorkoutsService {
     idempotencyKey?: string,
   ): Promise<LogWorkoutsResult> {
     // Pure validation/normalization first: invalid batches never open a transaction.
-    const prepared = prepareEntries(dto.entries, { timeZone: dto.timezone, now: new Date() });
+    // Stored as sent: the runtime's "canonical" ids are legacy CLDR names (Asia/Saigon for
+    // Asia/Ho_Chi_Minh), which would surprise clients; every spelling resolves identically.
+    const timeZone = dto.timezone;
+    const prepared = prepareEntries(dto.entries, { timeZone, now: new Date() });
     const requestHash = idempotencyKey ? this.idempotency.fingerprint(dto) : undefined;
 
     return this.transactions.run(async (tx) => {
@@ -52,7 +55,7 @@ export class WorkoutsService {
       const created = await this.repository.insertBatch(
         tx,
         userId,
-        dto.timezone ?? null,
+        timeZone ?? null,
         prepared,
         exercises,
       );
