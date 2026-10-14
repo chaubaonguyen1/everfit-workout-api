@@ -34,6 +34,8 @@ describe('GET /api/v1/users/:userId/workouts (e2e)', () => {
           { date: '2026-10-10T08:00:00Z', exerciseName: 'Back Squat', sets: [set(150)] },
           // 23:30 on Oct 12 in Ho Chi Minh City = 16:30Z.
           { date: '2026-10-12T16:30:00Z', exerciseName: 'Lat Pulldown', sets: [set(60)] },
+          // 18:00Z is still Oct 12 in UTC but already Oct 13 01:00 in Ho Chi Minh City.
+          { date: '2026-10-12T18:00:00Z', exerciseName: 'Barbell Row', sets: [set(70)] },
         ],
       })
       .expect(201);
@@ -52,7 +54,7 @@ describe('GET /api/v1/users/:userId/workouts (e2e)', () => {
     const res = await history().expect(200);
 
     const dates = res.body.data.map((e: HistoryEntry) => e.performedAt);
-    expect(res.body.data).toHaveLength(7);
+    expect(res.body.data).toHaveLength(8);
     expect([...dates].sort().reverse()).toEqual(dates);
     expect(res.body.pageInfo).toEqual({ limit: 20, hasMore: false, nextCursor: null });
   });
@@ -72,7 +74,7 @@ describe('GET /api/v1/users/:userId/workouts (e2e)', () => {
     const all = (await history().expect(200)).body.data.map((e: HistoryEntry) => e.id);
     expect(pages).toBe(4);
     expect(seen).toEqual(all);
-    expect(new Set(seen).size).toBe(7);
+    expect(new Set(seen).size).toBe(8);
   });
 
   it('filters by partial, case-insensitive exercise name', async () => {
@@ -107,17 +109,50 @@ describe('GET /api/v1/users/:userId/workouts (e2e)', () => {
   });
 
   it('interprets date ranges in the requested time zone, including the whole `to` day', async () => {
-    // Oct 12 16:30Z is Oct 12 23:30 in Ho Chi Minh City → inside a range ending on Oct 12 there…
+    const names = (res: request.Response) =>
+      res.body.data.map((e: HistoryEntry) => e.exerciseName).sort();
+
+    // Oct 12 in UTC: both the 16:30Z and the 18:00Z entries.
+    const utc = await history({ from: '2026-10-12', to: '2026-10-12' }).expect(200);
+    expect(names(utc)).toEqual(['Barbell Row', 'Lat Pulldown']);
+
+    // Oct 12 in Ho Chi Minh City (UTC+7): 16:30Z is 23:30 that day, 18:00Z is already Oct 13.
     const local = await history({
       from: '2026-10-12',
       to: '2026-10-12',
       timezone: 'Asia/Ho_Chi_Minh',
-    });
-    expect(local.body.data.map((e: HistoryEntry) => e.exerciseName)).toEqual(['Lat Pulldown']);
+    }).expect(200);
+    expect(names(local)).toEqual(['Lat Pulldown']);
+  });
 
-    // …and also on Oct 12 in UTC, but not when the range ends on Oct 11 in UTC.
-    const utc = await history({ from: '2026-10-11', to: '2026-10-11' });
-    expect(utc.body.data).toEqual([]);
+  it('ignores a blank exercise filter instead of rejecting it', async () => {
+    const res = await history({ exercise: '' }).expect(200);
+
+    expect(res.body.data).toHaveLength(8);
+  });
+
+  it('pages through filtered results', async () => {
+    const first = await history({ exercise: 'bench', limit: 2 }).expect(200);
+    const second = await history({
+      exercise: 'bench',
+      limit: 2,
+      cursor: first.body.pageInfo.nextCursor,
+    }).expect(200);
+
+    expect(first.body.pageInfo.hasMore).toBe(true);
+    expect(second.body.data).toHaveLength(1);
+    expect(second.body.pageInfo).toMatchObject({ hasMore: false, nextCursor: null });
+    expect(second.body.data[0].exerciseName).toMatch(/Bench/);
+  });
+
+  it('rejects a cursor reused with different filters', async () => {
+    const first = await history({ exercise: 'bench', limit: 1 }).expect(200);
+
+    const res = await history({ exercise: 'squat', cursor: first.body.pageInfo.nextCursor }).expect(
+      400,
+    );
+
+    expect(res.body.error.code).toBe('INVALID_CURSOR');
   });
 
   it('returns each set in its logged unit by default', async () => {
