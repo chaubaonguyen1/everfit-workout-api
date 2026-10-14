@@ -72,7 +72,10 @@ model IdempotencyKey {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@id([userId, key])
-  // Supports a periodic TTL cleanup (DELETE ... WHERE created_at < now() - interval '24 hours').
+  // Not implemented yet: keys are kept indefinitely. The index exists so a scheduled cleanup
+  // (DELETE … WHERE created_at < now() - interval '24 hours') stays cheap when added.
+  // Keys are not scoped per endpoint: only POST /workouts is idempotent today; a second
+  // idempotent endpoint would need a `scope` column in the primary key.
   @@index([createdAt])
   @@map("idempotency_keys")
 }

@@ -78,6 +78,13 @@ describe('POST /api/v1/users/:userId/workouts (e2e)', () => {
       });
       expect(stored).toHaveLength(3);
       expect(Number(stored[0].weightKg)).toBeCloseTo(140, 6);
+
+      // Original value + unit are kept, and the normalized kg is stored at full column precision
+      // (102.058283…), not the 2-decimal value shown in the response.
+      const lbSet = stored.find((s) => s.unit === 'lb');
+      expect(lbSet).toBeDefined();
+      expect(Number(lbSet?.weight)).toBe(225);
+      expect(lbSet?.weightKg.toString()).toBe('102.058283');
     });
 
     it('creates exercises that are not in the catalog', async () => {
@@ -239,8 +246,51 @@ describe('POST /api/v1/users/:userId/workouts (e2e)', () => {
       );
 
       expect(responses.map((r) => r.status)).toEqual([201, 201, 201, 201, 201]);
-      expect(new Set(responses.map((r) => r.body.data[0].id)).size).toBe(1);
+      // One request did the work; the other four replayed its exact response.
+      const replays = responses.filter((r) => r.headers['idempotent-replayed'] === 'true');
+      expect(replays).toHaveLength(4);
+      for (const r of responses) expect(r.body).toEqual(responses[0].body);
       expect(await prisma.workoutEntry.count({ where: { userId } })).toBe(2);
+    });
+
+    it('makes a duplicate wait while another transaction holds the key, then take over on rollback', async () => {
+      // Deterministic version of the race: hold an uncommitted claim, prove the HTTP request
+      // blocks on it, then roll back and prove the request proceeds and owns the key.
+      const userId = newUserId();
+      const key = 'held-key';
+      let release!: () => void;
+      const released = new Promise<void>((resolve) => (release = resolve));
+      let claimed!: () => void;
+      const claimInserted = new Promise<void>((resolve) => (claimed = resolve));
+
+      const holder = prisma
+        .$transaction(
+          async (tx) => {
+            await tx.idempotencyKey.create({ data: { userId, key, requestHash: 'x'.repeat(64) } });
+            claimed();
+            await released;
+            throw new Error('rollback on purpose');
+          },
+          { timeout: 15_000 },
+        )
+        .catch(() => undefined);
+      await claimInserted;
+
+      let settled = false;
+      const pending = post(userId, { entries: [benchEntry()] }, key).then((res) => {
+        settled = true;
+        return res;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect(settled).toBe(false);
+
+      release();
+      await holder;
+      const res = await pending;
+
+      expect(res.status).toBe(201);
+      expect(res.headers['idempotent-replayed']).toBeUndefined();
+      expect(await prisma.workoutEntry.count({ where: { userId } })).toBe(1);
     });
   });
 
@@ -254,7 +304,7 @@ describe('POST /api/v1/users/:userId/workouts (e2e)', () => {
       expect(await prisma.workoutEntry.count({ where: { userId } })).toBe(2);
     });
 
-    it('creates a brand-new exercise only once when two requests introduce it concurrently', async () => {
+    it('lets concurrent requests introduce the same new exercise without 409/500', async () => {
       const name = uniqueExerciseName('Landmine Press');
       const requests = Array.from({ length: 4 }, () =>
         post(newUserId(), { entries: [benchEntry({ exerciseName: name })] }),
